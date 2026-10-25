@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SegreBot — Waste Segregation Control Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root{
+  --bg:#F4F6F8;
+  --surface:#FFFFFF;
+  --surface-sunk:#F8FAFB;
+  --ink:#14181D;
+  --muted:#5C6773;
+  --faint:#8A94A0;
+  --line:#E3E8EE;
+  --line-strong:#CFD7E0;
+
+  --blue:#1D6FE0;      --blue-soft:#EAF2FE;  --blue-ink:#144F9F;
+  --green:#16874F;     --green-soft:#E7F5ED; --green-ink:#0E6039;
+  --amber:#B9760B;     --amber-soft:#FDF3E3; --amber-ink:#8A5806;
+  --red:#C62828;       --red-soft:#FCEBEB;   --red-ink:#8E1D1D;
+  --slate:#546070;     --slate-soft:#EEF1F5;
+
+  --r-card:14px; --r-ctl:10px; --r-pill:999px;
+  --sh-1:0 1px 2px rgba(20,24,29,.05), 0 4px 12px rgba(20,24,29,.05);
+  --sh-2:0 2px 6px rgba(20,24,29,.07), 0 12px 28px rgba(20,24,29,.07);
+
+  --rail-w:236px;
+  --ff-display:'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --ff-body:'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --ff-mono:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:var(--ff-body); font-size:14px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{font-family:var(--ff-display); margin:0; letter-spacing:-.01em}
+button,input,select{font:inherit; color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--blue); outline-offset:2px; border-radius:6px}
+
+/* machine-reported values are always mono */
+.mono{font-family:var(--ff-mono); font-variant-numeric:tabular-nums}
+
+/* ============================================================
+   APP SHELL
+   ============================================================ */
+.app{display:flex; min-height:100vh}
+
+.rail{
+  width:var(--rail-w); flex:0 0 var(--rail-w);
+  background:var(--surface); border-right:1px solid var(--line);
+  display:flex; flex-direction:column; position:sticky; top:0; height:100vh;
+}
+.brand{padding:20px 18px 16px; border-bottom:1px solid var(--line); display:flex; gap:11px; align-items:center}
+.brand-mark{
+  width:34px; height:34px; flex:none; border-radius:9px; background:var(--green);
+  display:grid; place-items:center; color:#fff;
+}
+.brand-name{font-family:var(--ff-display); font-weight:700; font-size:16px; line-height:1.15}
+.brand-sub{font-size:11px; color:var(--faint); letter-spacing:.04em; text-transform:uppercase; font-weight:500}
+
+.nav{padding:12px 10px; display:flex; flex-direction:column; gap:2px; overflow-y:auto}
+.nav-label{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); font-weight:600; padding:12px 10px 6px}
+.nav-item{
+  display:flex; align-items:center; gap:11px; padding:9px 11px; border-radius:var(--r-ctl);
+  background:none; border:0; width:100%; text-align:left; color:var(--muted); font-weight:500;
+  transition:background .13s, color .13s;
+}
+.nav-item svg{flex:none; opacity:.85}
+.nav-item:hover{background:var(--surface-sunk); color:var(--ink)}
+.nav-item.is-active{background:var(--blue-soft); color:var(--blue-ink); font-weight:600}
+.nav-item.is-active svg{opacity:1}
+.nav-badge{margin-left:auto; font-size:11px; padding:1px 7px; border-radius:var(--r-pill); background:var(--green-soft); color:var(--green-ink); font-weight:600}
+
+.rail-foot{margin-top:auto; padding:14px 16px; border-top:1px solid var(--line); font-size:11px; color:var(--faint)}
+.rail-foot .mono{color:var(--muted)}
+
+.main{flex:1; min-width:0; display:flex; flex-direction:column}
+
+/* ---- top bar ---- */
+.topbar{
+  position:sticky; top:0; z-index:30; background:rgba(255,255,255,.92);
+  backdrop-filter:blur(8px); border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:16px; padding:12px 22px;
+}
+.topbar-title{font-size:15px; font-weight:600}
+.topbar-title span{display:block; font-family:var(--ff-body); font-size:11.5px; font-weight:400; color:var(--faint); letter-spacing:0}
+.topbar-spacer{flex:1}
+.topbar-metrics{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+
+.chip{
+  display:inline-flex; align-items:center; gap:7px; padding:6px 12px;
+  border-radius:var(--r-pill); background:var(--surface-sunk);
+  border:1px solid var(--line); font-size:12.5px; font-weight:500; color:var(--muted);
+}
+.chip b{font-family:var(--ff-mono); font-weight:600; color:var(--ink); font-size:12px}
+.chip.ok{background:var(--green-soft); border-color:#CBE7D8; color:var(--green-ink)} .chip.ok b{color:var(--green-ink)}
+.chip.warn{background:var(--amber-soft); border-color:#F0DCB8; color:var(--amber-ink)} .chip.warn b{color:var(--amber-ink)}
+.chip.bad{background:var(--red-soft); border-color:#F2CFCF; color:var(--red-ink)} .chip.bad b{color:var(--red-ink)}
+.chip.blue{background:var(--blue-soft); border-color:#D2E4FC; color:var(--blue-ink)} .chip.blue b{color:var(--blue-ink)}
+
+.lamp{width:8px; height:8px; border-radius:50%; background:var(--faint); flex:none}
+.lamp.ok{background:var(--green)}
+.lamp.warn{background:var(--amber)}
+.lamp.bad{background:var(--red)}
+.lamp.live{animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ---- emergency stop ---- */
+.estop{
+  position:relative; width:62px; height:62px; border-radius:50%; border:0; padding:0; flex:none;
+  background:radial-gradient(circle at 50% 34%, #E14B4B 0%, #C62828 58%, #93211F 100%);
+  box-shadow:0 0 0 5px #FBE3E3, 0 0 0 6px #EFC9C9, 0 5px 10px rgba(146,33,31,.32);
+  color:#fff; font-family:var(--ff-display); font-weight:700; font-size:10px; letter-spacing:.06em;
+  display:grid; place-items:center; transition:transform .1s, box-shadow .15s;
+}
+.estop:hover{box-shadow:0 0 0 5px #FBE3E3, 0 0 0 6px #E7B6B6, 0 7px 14px rgba(146,33,31,.4)}
+.estop:active{transform:translateY(2px)}
+.estop.is-latched{
+  background:radial-gradient(circle at 50% 60%, #8E1D1D 0%, #6E1615 100%);
+  box-shadow:0 0 0 5px #F6D3D3, 0 0 0 6px #E0A9A9, inset 0 3px 8px rgba(0,0,0,.4);
+  transform:translateY(3px);
+}
+.estop-wrap{display:flex; flex-direction:column; align-items:center; gap:3px}
+.estop-cap{font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--red-ink); font-weight:700}
+
+.estop-banner{
+  display:none; align-items:center; gap:12px; padding:11px 22px;
+  background:var(--red-soft); border-bottom:1px solid #F0C4C4; color:var(--red-ink); font-weight:600; font-size:13px;
+}
+.app.is-estopped .estop-banner{display:flex}
+.app.is-estopped .content{filter:saturate(.55)}
+.estop-banner button{
+  margin-left:auto; background:var(--surface); border:1px solid #E3B6B6; color:var(--red-ink);
+  padding:6px 14px; border-radius:var(--r-ctl); font-weight:600; font-size:12.5px;
+}
+.estop-banner button:hover{background:#fff; border-color:var(--red)}
+
+/* ---- content / views ---- */
+.content{padding:22px; flex:1}
+.view{display:none; animation:rise .22s ease}
+.view.is-active{display:block}
+@keyframes rise{from{opacity:0; transform:translateY(6px)}to{opacity:1; transform:none}}
+
+.view-head{display:flex; align-items:flex-end; gap:16px; margin-bottom:18px; flex-wrap:wrap}
+.view-head h2{font-size:21px; font-weight:600}
+.view-head p{margin:3px 0 0; color:var(--muted); font-size:13px}
+.view-head .spacer{flex:1}
+
+/* ---- grid ---- */
+.grid{display:grid; gap:14px}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g-main{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+.g-ctl{grid-template-columns:minmax(0,380px) minmax(0,1fr)}
+.mt{margin-top:14px}
+
+/* ---- card ---- */
+.card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-card); box-shadow:var(--sh-1)}
+.card-head{display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid var(--line)}
+.card-head h3{font-size:13.5px; font-weight:600}
+.card-head .spacer{flex:1}
+.card-body{padding:16px}
+.card-body.tight{padding:12px}
+.card-body.flush{padding:0}
+.eyebrow{font-size:10px; letter-spacing:.11em; text-transform:uppercase; color:var(--faint); font-weight:600}
+
+/* ---- readout (hero stats) ---- */
+.readout{padding:15px 16px 14px; display:flex; flex-direction:column; gap:6px; position:relative; overflow:hidden}
+.readout::after{content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--line-strong)}
+.readout.b::after{background:var(--blue)} .readout.g::after{background:var(--green)}
+.readout.a::after{background:var(--amber)} .readout.s::after{background:var(--slate)}
+.readout-val{font-family:var(--ff-display); font-size:23px; font-weight:600; line-height:1.15; letter-spacing:-.02em}
+.readout-val.mono{font-family:var(--ff-mono); font-size:22px; font-weight:700}
+.readout-sub{font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px}
+
+/* ---- camera viewport ---- */
+.viewport{
+  position:relative; aspect-ratio:16/10; border-radius:11px; overflow:hidden;
+  background:
+    linear-gradient(135deg,#E9EDF1 0%,#DDE3E9 100%);
+  border:1px solid var(--line-strong);
+}
+.viewport-grid{
+  position:absolute; inset:0;
+  background-image:linear-gradient(var(--line-strong) 1px,transparent 1px),linear-gradient(90deg,var(--line-strong) 1px,transparent 1px);
+  background-size:34px 34px; opacity:.5;
+}
+.viewport-vignette{position:absolute; inset:0; background:radial-gradient(ellipse at center,transparent 45%,rgba(84,96,112,.16) 100%)}
+.viewport-belt{position:absolute; left:0; right:0; bottom:0; height:26%; background:repeating-linear-gradient(90deg,#CDD5DD 0 26px,#C3CCD6 26px 52px); border-top:1px solid var(--line-strong); opacity:.8}
+.scanline{
+  position:absolute; left:0; right:0; height:2px; top:0;
+  background:linear-gradient(90deg,transparent,rgba(29,111,224,.65),transparent);
+  animation:scan 3.4s ease-in-out infinite;
+}
+@keyframes scan{0%,100%{top:6%}50%{top:92%}}
+.bbox{
+  position:absolute; border:2px solid var(--blue); border-radius:5px;
+  box-shadow:0 0 0 9999px rgba(244,246,248,.28) inset;
+  transition:all .5s cubic-bezier(.4,0,.2,1);
+}
+.bbox-tag{
+  position:absolute; top:-25px; left:-2px; background:var(--blue); color:#fff;
+  font-family:var(--ff-mono); font-size:11px; font-weight:700; padding:2px 8px; border-radius:5px; white-space:nowrap;
+}
+.bbox.cat-paper{border-color:var(--amber)} .bbox.cat-paper .bbox-tag{background:var(--amber)}
+.bbox.cat-metal{border-color:var(--slate)} .bbox.cat-metal .bbox-tag{background:var(--slate)}
+.viewport-osd{
+  position:absolute; left:10px; top:10px; display:flex; gap:6px; align-items:center;
+  font-family:var(--ff-mono); font-size:10.5px; font-weight:600; color:var(--slate);
+  background:rgba(255,255,255,.85); padding:4px 9px; border-radius:var(--r-pill); border:1px solid var(--line);
+}
+.viewport-foot{
+  position:absolute; right:10px; bottom:10px; font-family:var(--ff-mono); font-size:10.5px;
+  color:var(--slate); background:rgba(255,255,255,.85); padding:4px 9px; border-radius:6px; border:1px solid var(--line);
+}
+.ghost-object{
+  position:absolute; border-radius:4px; background:rgba(84,96,112,.28); border:1px solid rgba(84,96,112,.4);
+  transition:all .5s cubic-bezier(.4,0,.2,1);
+}
+
+/* ---- arm stage ---- */
+.stage{background:var(--surface-sunk); border-radius:11px; border:1px solid var(--line); padding:6px}
+.stage svg{display:block; width:100%; height:auto}
+
+/* ---- joint list ---- */
+.jrow{display:grid; grid-template-columns:1fr auto; gap:3px 10px; padding:9px 0; border-bottom:1px solid var(--line)}
+.jrow:last-child{border-bottom:0}
+.jrow-name{font-size:12.5px; font-weight:500; color:var(--muted)}
+.jrow-val{font-family:var(--ff-mono); font-size:13px; font-weight:700}
+.jbar{grid-column:1/-1; height:5px; border-radius:3px; background:var(--slate-soft); overflow:hidden; position:relative}
+.jbar i{position:absolute; top:0; bottom:0; background:var(--blue); border-radius:3px; transition:all .18s linear; display:block}
+
+/* ---- joint control ---- */
+.jctl{padding:14px 16px; border-bottom:1px solid var(--line)}
+.jctl:last-child{border-bottom:0}
+.jctl-top{display:flex; align-items:baseline; gap:10px; margin-bottom:9px}
+.jctl-label{font-weight:600; font-size:13.5px}
+.jctl-axis{font-family:var(--ff-mono); font-size:10.5px; color:var(--faint); background:var(--surface-sunk); padding:1px 6px; border-radius:5px; border:1px solid var(--line)}
+.jctl-read{margin-left:auto; font-family:var(--ff-mono); font-size:17px; font-weight:700}
+.jctl-read small{font-size:11px; color:var(--faint); font-weight:500}
+.jctl-row{display:flex; align-items:center; gap:10px}
+.step{
+  width:32px; height:32px; flex:none; border-radius:8px; border:1px solid var(--line-strong);
+  background:var(--surface); font-size:17px; font-weight:600; color:var(--muted); line-height:1;
+  display:grid; place-items:center; transition:.12s;
+}
+.step:hover:not(:disabled){background:var(--blue-soft); border-color:var(--blue); color:var(--blue-ink)}
+.step:disabled{opacity:.4; cursor:not-allowed}
+.jctl-limits{display:flex; justify-content:space-between; font-family:var(--ff-mono); font-size:10.5px; color:var(--faint); margin-top:6px}
+
+input[type=range]{
+  -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:3px;
+  background:var(--slate-soft); outline-offset:5px;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; width:19px; height:19px; border-radius:50%;
+  background:var(--surface); border:2.5px solid var(--blue); box-shadow:0 1px 4px rgba(20,24,29,.2); cursor:grab;
+}
+input[type=range]::-moz-range-thumb{
+  width:19px; height:19px; border-radius:50%; background:var(--surface);
+  border:2.5px solid var(--blue); box-shadow:0 1px 4px rgba(20,24,29,.2); cursor:grab;
+}
+input[type=range]:disabled{opacity:.5}
+input[type=range]:disabled::-webkit-slider-thumb{border-color:var(--faint); cursor:not-allowed}
+
+/* ---- buttons ---- */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  padding:9px 15px; border-radius:var(--r-ctl); border:1px solid var(--line-strong);
+  background:var(--surface); font-size:13px; font-weight:600; color:var(--ink); transition:.13s;
+}
+.btn:hover:not(:disabled){background:var(--surface-sunk); border-color:var(--faint)}
+.btn:disabled{opacity:.45; cursor:not-allowed}
+.btn.primary{background:var(--blue); border-color:var(--blue); color:#fff}
+.btn.primary:hover:not(:disabled){background:#1861C7; border-color:#1861C7}
+.btn.good{background:var(--green); border-color:var(--green); color:#fff}
+.btn.good:hover:not(:disabled){background:#116E40; border-color:#116E40}
+.btn.danger{background:var(--surface); border-color:#E7BDBD; color:var(--red-ink)}
+.btn.danger:hover:not(:disabled){background:var(--red-soft); border-color:var(--red)}
+.btn.sm{padding:6px 11px; font-size:12px}
+.btn-row{display:flex; gap:9px; flex-wrap:wrap}
+
+/* ---- segmented mode switch ---- */
+.seg{display:inline-flex; background:var(--surface-sunk); border:1px solid var(--line); border-radius:var(--r-ctl); padding:3px; gap:3px}
+.seg button{
+  border:0; background:none; padding:7px 16px; border-radius:7px; font-size:13px; font-weight:600; color:var(--muted); transition:.13s;
+}
+.seg button.is-on{background:var(--surface); color:var(--ink); box-shadow:0 1px 3px rgba(20,24,29,.12)}
+.seg button.is-on[data-mode=AUTOMATIC]{color:var(--green-ink)}
+.seg button.is-on[data-mode=MANUAL]{color:var(--blue-ink)}
+
+/* ---- pills / categories ---- */
+.pill{display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:var(--r-pill); font-size:11.5px; font-weight:600; border:1px solid transparent}
+.pill.plastic{background:var(--blue-soft); color:var(--blue-ink); border-color:#D2E4FC}
+.pill.paper{background:var(--amber-soft); color:var(--amber-ink); border-color:#F0DCB8}
+.pill.metal{background:var(--slate-soft); color:var(--slate); border-color:#DDE3EA}
+.pill.ok{background:var(--green-soft); color:var(--green-ink); border-color:#CBE7D8}
+.pill.warn{background:var(--amber-soft); color:var(--amber-ink); border-color:#F0DCB8}
+.pill.bad{background:var(--red-soft); color:var(--red-ink); border-color:#F2CFCF}
+.pill-dot{width:7px; height:7px; border-radius:2px; flex:none}
+.plastic .pill-dot{background:var(--blue)} .paper .pill-dot{background:var(--amber)} .metal .pill-dot{background:var(--slate)}
+
+/* ---- activity feed ---- */
+.feed{display:flex; flex-direction:column}
+.feed-item{display:flex; gap:12px; padding:11px 16px; border-bottom:1px solid var(--line); align-items:flex-start}
+.feed-item:last-child{border-bottom:0}
+.feed-icon{width:30px; height:30px; border-radius:8px; flex:none; display:grid; place-items:center; background:var(--slate-soft); color:var(--slate)}
+.feed-icon.plastic{background:var(--blue-soft); color:var(--blue-ink)}
+.feed-icon.paper{background:var(--amber-soft); color:var(--amber-ink)}
+.feed-icon.metal{background:var(--slate-soft); color:var(--slate)}
+.feed-main{flex:1; min-width:0}
+.feed-title{font-size:13px; font-weight:600}
+.feed-meta{font-size:11.5px; color:var(--muted); margin-top:2px; display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+.feed-time{font-family:var(--ff-mono); font-size:11px; color:var(--faint); flex:none}
+
+/* ---- table ---- */
+.table-wrap{overflow-x:auto}
+table{width:100%; border-collapse:collapse; font-size:13px}
+thead th{
+  text-align:left; padding:10px 14px; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--faint); font-weight:600; border-bottom:1px solid var(--line); background:var(--surface-sunk); white-space:nowrap;
+}
+tbody td{padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--surface-sunk)}
+.td-strong{font-weight:600}
+
+/* ---- filters ---- */
+.filters{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.fchip{padding:6px 13px; border-radius:var(--r-pill); border:1px solid var(--line-strong); background:var(--surface); font-size:12.5px; font-weight:500; color:var(--muted)}
+.fchip.is-on{background:var(--ink); border-color:var(--ink); color:#fff}
+.input{
+  padding:8px 12px; border-radius:var(--r-ctl); border:1px solid var(--line-strong);
+  background:var(--surface); font-size:13px; min-width:150px;
+}
+.input:focus{outline:2px solid var(--blue); outline-offset:-1px; border-color:var(--blue)}
+
+/* ---- confidence ring ---- */
+.ring-wrap{display:flex; align-items:center; gap:16px}
+.ring{position:relative; width:104px; height:104px; flex:none}
+.ring svg{transform:rotate(-90deg)}
+.ring-label{position:absolute; inset:0; display:grid; place-items:center; text-align:center}
+.ring-label b{display:block; font-family:var(--ff-mono); font-size:21px; font-weight:700; line-height:1}
+.ring-label span{font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:var(--faint); font-weight:600}
+
+/* ---- meters / bins ---- */
+.meter{margin-bottom:13px}
+.meter:last-child{margin-bottom:0}
+.meter-top{display:flex; align-items:baseline; gap:8px; margin-bottom:5px; font-size:12.5px}
+.meter-top b{margin-left:auto; font-family:var(--ff-mono); font-size:12.5px}
+.meter-track{height:8px; border-radius:4px; background:var(--slate-soft); overflow:hidden}
+.meter-track i{display:block; height:100%; border-radius:4px; transition:width .5s ease}
+
+/* ---- KPI grid ---- */
+.kpi{padding:14px 16px}
+.kpi-label{font-size:11.5px; color:var(--muted); font-weight:500}
+.kpi-val{font-family:var(--ff-mono); font-size:26px; font-weight:700; line-height:1.2; margin-top:4px; letter-spacing:-.02em}
+.kpi-delta{font-size:11.5px; margin-top:3px; color:var(--muted)}
+.kpi-delta.up{color:var(--green-ink)} .kpi-delta.down{color:var(--red-ink)}
+
+/* ---- charts ---- */
+.chart{width:100%; display:block; height:auto; overflow:visible}
+.legend{display:flex; flex-direction:column; gap:9px}
+.legend-row{display:flex; align-items:center; gap:9px; font-size:12.5px}
+.legend-key{width:10px; height:10px; border-radius:3px; flex:none}
+.legend-row b{margin-left:auto; font-family:var(--ff-mono); font-weight:700}
+.legend-row span{color:var(--muted)}
+
+/* ---- system status ---- */
+.sys{padding:15px 16px}
+.sys-top{display:flex; align-items:center; gap:9px; margin-bottom:11px}
+.sys-name{font-weight:600; font-size:13.5px}
+.sys-kv{display:flex; justify-content:space-between; font-size:12px; padding:5px 0; border-bottom:1px dashed var(--line)}
+.sys-kv:last-child{border-bottom:0}
+.sys-kv span{color:var(--muted)}
+.sys-kv b{font-family:var(--ff-mono); font-weight:600}
+
+/* ---- console log ---- */
+.console{
+  font-family:var(--ff-mono); font-size:11.5px; line-height:1.85; padding:12px 16px;
+  background:var(--surface-sunk); max-height:230px; overflow-y:auto; border-radius:0 0 var(--r-card) var(--r-card);
+}
+.console-line{display:flex; gap:10px}
+.console-t{color:var(--faint); flex:none}
+.console-tag{flex:none; font-weight:700; width:52px}
+.console-tag.i{color:var(--blue-ink)} .console-tag.w{color:var(--amber-ink)}
+.console-tag.e{color:var(--red-ink)} .console-tag.s{color:var(--green-ink)}
+.console-msg{color:var(--muted)}
+
+/* ---- settings ---- */
+.field{margin-bottom:16px}
+.field:last-child{margin-bottom:0}
+.field-label{font-size:12.5px; font-weight:600; display:block; margin-bottom:5px}
+.field-hint{font-size:11.5px; color:var(--faint); margin-top:5px}
+.field .input{width:100%}
+.switch{display:flex; align-items:center; gap:11px; padding:11px 0; border-bottom:1px solid var(--line)}
+.switch:last-child{border-bottom:0}
+.switch-main{flex:1}
+.switch-title{font-size:13px; font-weight:600}
+.switch-desc{font-size:11.5px; color:var(--muted); margin-top:1px}
+.toggle{width:42px; height:24px; border-radius:var(--r-pill); background:var(--line-strong); border:0; position:relative; flex:none; transition:.16s}
+.toggle::after{content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.22); transition:.16s}
+.toggle.is-on{background:var(--green)}
+.toggle.is-on::after{transform:translateX(18px)}
+
+.note{
+  display:flex; gap:10px; padding:11px 13px; border-radius:var(--r-ctl);
+  background:var(--blue-soft); border:1px solid #D2E4FC; color:var(--blue-ink); font-size:12.5px; line-height:1.55;
+}
+.note.amber{background:var(--amber-soft); border-color:#F0DCB8; color:var(--amber-ink)}
+.note svg{flex:none; margin-top:1px}
+.note code{font-family:var(--ff-mono); font-size:11.5px; background:rgba(255,255,255,.7); padding:1px 5px; border-radius:4px}
+
+.empty{padding:34px 16px; text-align:center; color:var(--muted); font-size:13px}
+.empty b{display:block; font-family:var(--ff-display); color:var(--ink); font-size:14px; margin-bottom:4px}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width:1180px){
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g-main,.g-ctl{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:980px){
+  .app{flex-direction:column}
+  .rail{width:100%; flex:none; height:auto; position:static; border-right:0; border-bottom:1px solid var(--line)}
+  .nav{flex-direction:row; overflow-x:auto; padding:8px 10px; gap:4px}
+  .nav-item{width:auto; white-space:nowrap; padding:8px 13px}
+  .nav-label,.rail-foot,.nav-badge{display:none}
+  .g3{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:720px){
+  .content{padding:14px}
+  .topbar{flex-wrap:wrap; padding:12px 14px}
+  .g4,.g3,.g2{grid-template-columns:minmax(0,1fr)}
+  .estop{width:52px; height:52px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms !important; transition-duration:.001ms !important}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ================= SIDEBAR ================= -->
+  <aside class="rail">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 11v5M14 11v5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">SegreBot</div>
+        <div class="brand-sub">Control Console</div>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <div class="nav-label">Operations</div>
+      <button class="nav-item is-active" data-view="dashboard">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Dashboard
+      </button>
+      <button class="nav-item" data-view="control">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        Robot Control
+      </button>
+      <button class="nav-item" data-view="detection">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Waste Detection
+        <span class="nav-badge" id="navBadge">live</span>
+      </button>
+
+      <div class="nav-label">Insight</div>
+      <button class="nav-item" data-view="analytics">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Analytics
+      </button>
+      <button class="nav-item" data-view="history">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+        Activity History
+      </button>
+
+      <div class="nav-label">Machine</div>
+      <button class="nav-item" data-view="system">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+        System Status
+      </button>
+      <button class="nav-item" data-view="settings">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V4a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
+    </nav>
+
+    <div class="rail-foot">
+      Firmware <span class="mono">v1.4.2</span><br>
+      Session uptime <span class="mono" id="uptime">00:00:00</span>
+    </div>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <div class="main">
+
+    <header class="topbar">
+      <div class="topbar-title">
+        Intelligent Waste Segregation System
+        <span>5-DOF manipulator · ML waste classification</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-metrics">
+        <span class="chip ok" id="chipConn"><i class="lamp ok live"></i> Robot connected · <b>ESP32</b></span>
+        <span class="chip blue" id="chipMode">Mode <b id="chipModeVal">AUTOMATIC</b></span>
+        <span class="chip" id="chipCycle">Cycle <b id="chipCycleVal">—</b></span>
+      </div>
+      <div class="estop-wrap">
+        <button class="estop" id="estopBtn" aria-label="Emergency stop">STOP</button>
+        <span class="estop-cap">Emergency</span>
+      </div>
+    </header>
+
+    <div class="estop-banner">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Emergency stop engaged. All servo motion is halted and new detections are ignored.
+      <button id="estopReset">Release and reset</button>
+    </div>
+
+    <main class="content">
+
+      <!-- ============ DASHBOARD ============ -->
+      <section class="view is-active" id="view-dashboard">
+        <div class="view-head">
+          <div>
+            <h2>Live operations</h2>
+            <p>Real-time view of the classifier, the manipulator and the sorting line.</p>
+          </div>
+          <div class="spacer"></div>
+          <span class="chip"><i class="lamp ok"></i> Belt running · <b>0.18 m/s</b></span>
+        </div>
+
+        <div class="grid g4">
+          <div class="card readout b">
+            <span class="eyebrow">Detected waste</span>
+            <span class="readout-val" id="dashObject">Awaiting object</span>
+            <span class="readout-sub" id="dashObjectSub">Camera idle</span>
+          </div>
+          <div class="card readout g">
+            <span class="eyebrow">ML confidence</span>
+            <span class="readout-val mono" id="dashConf">—</span>
+            <span class="readout-sub" id="dashConfSub">Threshold 85.0%</span>
+          </div>
+          <div class="card readout a">
+            <span class="eyebrow">Target bin</span>
+            <span class="readout-val" id="dashBin">—</span>
+            <span class="readout-sub" id="dashBinSub">No assignment</span>
+          </div>
+          <div class="card readout s">
+            <span class="eyebrow">Robot status</span>
+            <span class="readout-val" id="dashStatus">Ready</span>
+            <span class="readout-sub" id="dashStatusSub"><i class="lamp ok"></i> Idle at home pose</span>
+          </div>
+        </div>
+
+        <div class="grid g-main mt">
+          <div class="card">
+            <div class="card-head">
+              <h3>Camera feed</h3>
+              <span class="chip sm" style="padding:3px 9px; font-size:11px"><i class="lamp ok live"></i> CAM0 · 640×480 · 15 fps</span>
+              <div class="spacer"></div>
+              <span class="eyebrow">Overhead, belt-mounted</span>
+            </div>
+            <div class="card-body">
+              <div class="viewport" id="viewportDash">
+                <div class="viewport-grid"></div>
+                <div class="viewport-belt"></div>
+                <div class="ghost-object" id="ghostDash" style="left:42%;top:44%;width:16%;height:22%"></div>
+                <div class="bbox" id="bboxDash" style="left:40%;top:40%;width:20%;height:30%;display:none">
+                  <span class="bbox-tag">—</span>
+                </div>
+                <div class="scanline"></div>
+                <div class="viewport-vignette"></div>
+                <div class="viewport-osd"><i class="lamp ok live"></i> REC</div>
+                <div class="viewport-foot" id="camStampDash">--:--:--</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3>Manipulator pose</h3>
+              <div class="spacer"></div>
+              <span class="eyebrow" id="poseName">Home</span>
+            </div>
+            <div class="card-body tight">
+              <div class="stage" id="stageDash"></div>
+              <div style="padding:6px 4px 0" id="jointReadout"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid g-main mt">
+          <div class="card">
+            <div class="card-head"><h3>Recent activity</h3><div class="spacer"></div>
+              <button class="btn sm" data-goto="history">View all</button>
+            </div>
+            <div class="feed" id="feedDash"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>Waste statistics</h3><div class="spacer"></div><span class="eyebrow">This shift</span></div>
+            <div class="card-body">
+              <div class="grid g3" style="gap:10px; margin-bottom:16px">
+                <div><span class="eyebrow">Plastic</span><div class="kpi-val" style="font-size:20px; color:var(--blue-ink)" id="sPlastic">0</div></div>
+                <div><span class="eyebrow">Paper</span><div class="kpi-val" style="font-size:20px; color:var(--amber-ink)" id="sPaper">0</div></div>
+                <div><span class="eyebrow">Metal</span><div class="kpi-val" style="font-size:20px; color:var(--slate)" id="sMetal">0</div></div>
+              </div>
+              <span class="eyebrow">Bin fill level</span>
+              <div style="margin-top:10px" id="binMeters"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ROBOT CONTROL ============ -->
+      <section class="view" id="view-control">
+        <div class="view-head">
+          <div>
+            <h2>Robot control</h2>
+            <p>Direct joint control of the 5-DOF arm. Manual commands are blocked while the cell runs automatically.</p>
+          </div>
+          <div class="spacer"></div>
+          <div class="seg" id="modeSeg">
+            <button data-mode="MANUAL">Manual mode</button>
+            <button data-mode="AUTOMATIC" class="is-on">Automatic mode</button>
+          </div>
+        </div>
+
+        <div id="modeNote" class="note amber" style="margin-bottom:14px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <div><b>Automatic mode is running.</b> The sequencer owns the arm — joint sliders and motion buttons are locked. Switch to manual mode to take control.</div>
+        </div>
+
+        <div class="grid g-ctl">
+          <div>
+            <div class="card">
+              <div class="card-head"><h3>Side elevation</h3><div class="spacer"></div><span class="eyebrow mono" id="tcpRead">TCP —</span></div>
+              <div class="card-body tight"><div class="stage" id="stageCtl"></div></div>
+            </div>
+            <div class="card mt">
+              <div class="card-head"><h3>Base rotation</h3><div class="spacer"></div><span class="eyebrow">Top view</span></div>
+              <div class="card-body tight"><div class="stage" id="stageTop"></div></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="card">
+              <div class="card-head">
+                <h3>Joint controls</h3><div class="spacer"></div>
+                <span class="chip sm" style="padding:3px 9px; font-size:11px">PCA9685 · <b>ch 0–5</b></span>
+              </div>
+              <div id="jointControls"></div>
+            </div>
+
+            <div class="card mt">
+              <div class="card-head"><h3>Motion commands</h3></div>
+              <div class="card-body">
+                <div class="btn-row">
+                  <button class="btn primary" data-cmd="home" id="btnHome">Home</button>
+                  <button class="btn" data-cmd="pick">Pick</button>
+                  <button class="btn" data-cmd="drop">Drop</button>
+                  <button class="btn" data-cmd="gripper_open">Gripper open</button>
+                  <button class="btn" data-cmd="gripper_close">Gripper close</button>
+                  <button class="btn danger" data-cmd="stop">Stop motion</button>
+                </div>
+                <div class="note mt" style="margin-top:14px">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  <div>Every command below is dispatched through <code>API.sendCommand()</code>. Point <code>API.BASE_URL</code> at the Flask server in Settings to drive real hardware.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mt">
+              <div class="card-head"><h3>Command log</h3><div class="spacer"></div>
+                <button class="btn sm" id="clearLog">Clear</button>
+              </div>
+              <div class="console" id="cmdLog"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ WASTE DETECTION ============ -->
+      <section class="view" id="view-detection">
+        <div class="view-head">
+          <div>
+            <h2>Waste detection</h2>
+            <p>Classifier output for the object currently under the camera.</p>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn primary" id="btnDetect">Run detection now</button>
+        </div>
+
+        <div class="grid g-main">
+          <div class="card">
+            <div class="card-head"><h3>Camera preview</h3><div class="spacer"></div>
+              <span class="eyebrow mono" id="camStampDet">--:--:--</span>
+            </div>
+            <div class="card-body">
+              <div class="viewport" id="viewportDet">
+                <div class="viewport-grid"></div>
+                <div class="viewport-belt"></div>
+                <div class="ghost-object" id="ghostDet" style="left:42%;top:44%;width:16%;height:22%"></div>
+                <div class="bbox" id="bboxDet" style="left:40%;top:40%;width:20%;height:30%;display:none">
+                  <span class="bbox-tag">—</span>
+                </div>
+                <div class="scanline"></div>
+                <div class="viewport-vignette"></div>
+                <div class="viewport-osd"><i class="lamp ok live"></i> CAM0</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>Classification result</h3></div>
+            <div class="card-body">
+              <div class="ring-wrap">
+                <div class="ring">
+                  <svg width="104" height="104" viewBox="0 0 104 104">
+                    <circle cx="52" cy="52" r="44" fill="none" stroke="#EEF1F5" stroke-width="11"/>
+                    <circle id="ringArc" cx="52" cy="52" r="44" fill="none" stroke="#16874F" stroke-width="11"
+                            stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="276.5"
+                            style="transition:stroke-dashoffset .6s ease, stroke .3s"/>
+                  </svg>
+                  <div class="ring-label"><b id="detConf">—</b><span>Confidence</span></div>
+                </div>
+                <div style="min-width:0">
+                  <span class="eyebrow">Detected object</span>
+                  <div style="font-family:var(--ff-display); font-size:19px; font-weight:600; margin:3px 0 8px" id="detObject">No object</div>
+                  <div id="detCatWrap"><span class="pill metal"><i class="pill-dot"></i>Unclassified</span></div>
+                </div>
+              </div>
+
+              <div style="margin-top:18px">
+                <div class="sys-kv"><span>Waste category</span><b id="detCat">—</b></div>
+                <div class="sys-kv"><span>Recommended bin</span><b id="detBin">—</b></div>
+                <div class="sys-kv"><span>Detection timestamp</span><b id="detStamp">—</b></div>
+                <div class="sys-kv"><span>Inference latency</span><b id="detLatency">—</b></div>
+                <div class="sys-kv"><span>Frame ID</span><b id="detFrame">—</b></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid g3 mt" id="catCards"></div>
+
+        <div class="card mt">
+          <div class="card-head"><h3>Detection history</h3><div class="spacer"></div><span class="eyebrow">Last 8 frames</span></div>
+          <div class="feed" id="feedDet"></div>
+        </div>
+      </section>
+
+      <!-- ============ ANALYTICS ============ -->
+      <section class="view" id="view-analytics">
+        <div class="view-head">
+          <div>
+            <h2>Analytics</h2>
+            <p>Throughput and classifier performance across the current shift.</p>
+          </div>
+          <div class="spacer"></div>
+          <div class="filters">
+            <button class="fchip is-on">Today</button>
+            <button class="fchip">7 days</button>
+            <button class="fchip">30 days</button>
+          </div>
+        </div>
+
+        <div class="grid g4">
+          <div class="card kpi"><div class="kpi-label">Total waste detected</div><div class="kpi-val" id="aTotal">0</div><div class="kpi-delta up" id="aTotalDelta">—</div></div>
+          <div class="card kpi"><div class="kpi-label">Successful sorts</div><div class="kpi-val" style="color:var(--green-ink)" id="aOk">0</div><div class="kpi-delta" id="aOkDelta">—</div></div>
+          <div class="card kpi"><div class="kpi-label">Failed operations</div><div class="kpi-val" style="color:var(--red-ink)" id="aFail">0</div><div class="kpi-delta" id="aFailDelta">—</div></div>
+          <div class="card kpi"><div class="kpi-label">Classification accuracy</div><div class="kpi-val" id="aAcc">—</div><div class="kpi-delta up">Validated on 420 held-out frames</div></div>
+        </div>
+
+        <div class="grid g-main mt">
+          <div class="card">
+            <div class="card-head"><h3>Items sorted per hour</h3><div class="spacer"></div><span class="eyebrow">08:00 – 18:00</span></div>
+            <div class="card-body"><div id="chartHourly"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Category split</h3></div>
+            <div class="card-body">
+              <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap">
+                <div id="chartDonut" style="flex:none"></div>
+                <div class="legend" id="donutLegend" style="flex:1; min-width:130px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid g2 mt">
+          <div class="card">
+            <div class="card-head"><h3>Per-class accuracy</h3><div class="spacer"></div><span class="eyebrow">MobileNetV2 · 3 classes</span></div>
+            <div class="card-body" id="chartAcc"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Pick outcome</h3><div class="spacer"></div><span class="eyebrow">Grip success by category</span></div>
+            <div class="card-body" id="chartOutcome"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ HISTORY ============ -->
+      <section class="view" id="view-history">
+        <div class="view-head">
+          <div>
+            <h2>Activity history</h2>
+            <p>Every detection and the pick-and-place cycle it triggered.</p>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn sm" id="btnExport">Export CSV</button>
+        </div>
+
+        <div class="card" style="padding:12px 14px; margin-bottom:14px">
+          <div class="filters">
+            <input class="input" id="histSearch" placeholder="Search object or bin…" />
+            <span style="width:8px"></span>
+            <button class="fchip is-on" data-filter="all">All</button>
+            <button class="fchip" data-filter="Plastic">Plastic</button>
+            <button class="fchip" data-filter="Paper">Paper</button>
+            <button class="fchip" data-filter="Metal">Metal</button>
+            <button class="fchip" data-filter="failed">Failed only</button>
+            <div class="spacer" style="flex:1"></div>
+            <span class="eyebrow" id="histCount">—</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Timestamp</th><th>Detected object</th><th>Category</th><th>Confidence</th>
+                <th>Target bin</th><th>Robot action</th><th>Status</th>
+              </tr></thead>
+              <tbody id="histBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SYSTEM ============ -->
+      <section class="view" id="view-system">
+        <div class="view-head">
+          <div>
+            <h2>System status</h2>
+            <p>Health of every subsystem between the camera and the servos.</p>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn sm" id="btnPing">Re-check all</button>
+        </div>
+
+        <div class="grid g3" id="sysGrid"></div>
+
+        <div class="card mt">
+          <div class="card-head"><h3>System log</h3><div class="spacer"></div><span class="eyebrow">Newest first</span></div>
+          <div class="console" id="sysLog"></div>
+        </div>
+      </section>
+
+      <!-- ============ SETTINGS ============ -->
+      <section class="view" id="view-settings">
+        <div class="view-head">
+          <div>
+            <h2>Settings</h2>
+            <p>Connection, classifier thresholds and bin assignment.</p>
+          </div>
+        </div>
+
+        <div class="grid g2">
+          <div class="card">
+            <div class="card-head"><h3>Backend connection</h3></div>
+            <div class="card-body">
+              <div class="field">
+                <label class="field-label" for="setBase">Flask API base URL</label>
+                <input class="input mono" id="setBase" value="http://192.168.1.42:5000/api" />
+                <div class="field-hint">Written to <code>API.BASE_URL</code>. All requests are prefixed with this value.</div>
+              </div>
+              <div class="switch">
+                <div class="switch-main">
+                  <div class="switch-title">Use mock data</div>
+                  <div class="switch-desc">Runs the console on the built-in simulator. Turn off once the Flask server is live.</div>
+                </div>
+                <button class="toggle is-on" id="tglMock" aria-pressed="true"></button>
+              </div>
+              <div class="switch">
+                <div class="switch-main">
+                  <div class="switch-title">Auto-sort on detection</div>
+                  <div class="switch-desc">Start a pick cycle as soon as confidence clears the threshold.</div>
+                </div>
+                <button class="toggle is-on" id="tglAuto" aria-pressed="true"></button>
+              </div>
+              <div class="switch">
+                <div class="switch-main">
+                  <div class="switch-title">Log every frame</div>
+                  <div class="switch-desc">Keeps rejected low-confidence frames in the activity table.</div>
+                </div>
+                <button class="toggle" id="tglVerbose" aria-pressed="false"></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>Classifier and motion</h3></div>
+            <div class="card-body">
+              <div class="field">
+                <label class="field-label">Confidence threshold — <span class="mono" id="thrVal">85%</span></label>
+                <input type="range" id="thrRange" min="50" max="99" value="85" />
+                <div class="field-hint">Objects below this score are routed to the reject chute instead of a bin.</div>
+              </div>
+              <div class="field">
+                <label class="field-label">Servo speed — <span class="mono" id="spdVal">100%</span></label>
+                <input type="range" id="spdRange" min="10" max="100" value="100" />
+                <div class="field-hint">Scales interpolation time for every joint move.</div>
+              </div>
+              <div class="field">
+                <label class="field-label">Bin assignment</label>
+                <div class="sys-kv"><span><span class="pill plastic"><i class="pill-dot"></i>Plastic</span></span><b>Bin A · base 62°</b></div>
+                <div class="sys-kv"><span><span class="pill paper"><i class="pill-dot"></i>Paper</span></span><b>Bin B · base 0°</b></div>
+                <div class="sys-kv"><span><span class="pill metal"><i class="pill-dot"></i>Metal</span></span><b>Bin C · base −62°</b></div>
+              </div>
+              <div class="btn-row" style="margin-top:16px">
+                <button class="btn primary" id="btnSave">Save settings</button>
+                <button class="btn" id="btnReset">Restore defaults</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mt">
+          <div class="card-head"><h3>Endpoint map</h3><div class="spacer"></div><span class="eyebrow">Contract for the Flask backend</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Frontend call</th><th>Method</th><th>Route</th><th>Returns</th></tr></thead>
+              <tbody class="mono" style="font-size:12px">
+                <tr><td>API.getStatus()</td><td>GET</td><td>/api/status</td><td>connection, mode, subsystem health</td></tr>
+                <tr><td>API.getJoints()</td><td>GET</td><td>/api/robot/joints</td><td>angle per joint, in degrees</td></tr>
+                <tr><td>API.setJoint(id, deg)</td><td>POST</td><td>/api/robot/joint</td><td>applied angle, ack</td></tr>
+                <tr><td>API.sendCommand(cmd)</td><td>POST</td><td>/api/robot/command</td><td>command id, accepted flag</td></tr>
+                <tr><td>API.setMode(mode)</td><td>POST</td><td>/api/robot/mode</td><td>active mode</td></tr>
+                <tr><td>API.emergencyStop()</td><td>POST</td><td>/api/robot/estop</td><td>latched flag</td></tr>
+                <tr><td>API.getDetection()</td><td>GET</td><td>/api/detection/latest</td><td>object, category, confidence, bbox</td></tr>
+                <tr><td>API.getHistory()</td><td>GET</td><td>/api/history</td><td>paged activity rows</td></tr>
+                <tr><td>API.getAnalytics()</td><td>GET</td><td>/api/analytics</td><td>counts, accuracy, hourly series</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<script>
+/* ==============================================================
+   1. API LAYER
+   --------------------------------------------------------------
+   Every screen reads through this object and nothing else. To go
+   live: set USE_MOCK = false and implement the routes listed in
+   Settings › Endpoint map. No other file changes are needed.
+   ============================================================== */
+const API = {
+  BASE_URL: 'http://127.0.0.1:5000/api',
+  USE_MOCK: false,
+
+  /* Single funnel for every request. If the backend is unreachable the console
+     reports it once, keeps working on simulated data, and recovers on its own. */
+  async _req(method, path, body, fallback){
+    if(this.USE_MOCK) return fallback();
+    try{
+      const opts = method === 'GET' ? {}
+        : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)};
+      const res = await fetch(this.BASE_URL + path, opts);
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      Net.recover();
+      return data;
+    }catch(err){
+      Net.drop(path, err);
+      return fallback();
+    }
+  },
+
+  getStatus()       { return this._req('GET',  '/status',           null,                       Mock.status); },
+  getJoints()       { return this._req('GET',  '/robot/joints',     null,                       Mock.joints); },
+  setJoint(id, deg) { return this._req('POST', '/robot/joint',      {joint:id, angle:deg},      () => Mock.ack({id, deg})); },
+  sendCommand(cmd)  { return this._req('POST', '/robot/command',    {command:cmd},              () => Mock.ack({cmd})); },
+  setMode(mode)     { return this._req('POST', '/robot/mode',       {mode},                     () => Mock.ack({mode})); },
+  emergencyStop(on) { return this._req('POST', '/robot/estop',      {engaged:on},               () => Mock.ack({estop:on})); },
+  getDetection()    { return this._req('GET',  '/detection/latest', null,                       Mock.detection); },
+  getHistory()      { return this._req('GET',  '/history',          null,                       Mock.history); },
+  getAnalytics()    { return this._req('GET',  '/analytics',        null,                       Mock.analytics); },
+  saveSettings(s)   { return this._req('POST', '/settings',         s,                          () => Mock.ack(s)); }
+};
+
+/* Connection watchdog — drives the header chip and the system log. */
+const Net = {
+  online:true,
+  drop(path, err){
+    if(!this.online) return;
+    this.online = false;
+    log('sysLog','ERROR', `No response from ${API.BASE_URL}${path} (${err.message}). Running on simulated data until the server replies.`);
+    renderConnChip();
+  },
+  recover(){
+    if(this.online) return;
+    this.online = true;
+    log('sysLog','SUCCESS','Backend responding again — live data restored.');
+    renderConnChip();
+  }
+};
+
+/* ==============================================================
+   2. STATIC DEFINITIONS
+   ============================================================== */
+const JOINTS = [
+  {id:'base',       name:'Base',        axis:'J1 · yaw',   min:-90, max: 90, home:  0, ch:0},
+  {id:'shoulder',   name:'Shoulder',    axis:'J2 · pitch', min: 20, max:120, home: 62, ch:1},
+  {id:'elbow',      name:'Elbow',       axis:'J3 · pitch', min: 15, max:130, home: 98, ch:2},
+  {id:'wristPitch', name:'Wrist pitch', axis:'J4 · pitch', min:-60, max: 60, home:-22, ch:3},
+  {id:'wristRoll',  name:'Wrist roll',  axis:'J5 · roll',  min:-180,max:180, home:  0, ch:4},
+  {id:'gripper',    name:'Gripper',     axis:'EE · jaw',   min:  0, max: 90, home: 40, ch:5}
+];
+
+const CATS = {
+  Plastic:{key:'plastic', bin:'Bin A', baseAngle: 62, color:'#1D6FE0',
+           objects:['PET water bottle','Plastic cup','Shampoo bottle','Polythene wrapper','Plastic straw','Detergent bottle']},
+  Paper:  {key:'paper',   bin:'Bin B', baseAngle:  0, color:'#B9760B',
+           objects:['Cardboard piece','Newspaper sheet','Paper cup','Cereal carton','Office paper','Paper bag']},
+  Metal:  {key:'metal',   bin:'Bin C', baseAngle:-62, color:'#546070',
+           objects:['Aluminium can','Steel bottle cap','Tin container','Foil tray','Metal spoon','Soda can']}
+};
+const CAT_KEYS = Object.keys(CATS);
+
+/* ==============================================================
+   3. MOCK DATA  (delete once Flask is wired in)
+   ============================================================== */
+const Mock = {
+  ack: (d) => Promise.resolve({ok:true, ...d}),
+  status: () => Promise.resolve({connected:true, mode:State.mode, subsystems:Mock.subsystems}),
+  joints: () => Promise.resolve({...State.joints}),
+  detection: () => Promise.resolve(Mock.newDetection()),
+  history: () => Promise.resolve(State.history),
+  analytics: () => Promise.resolve(Mock.buildAnalytics()),
+
+  subsystems: [
+    {name:'ESP32 controller', state:'ok',   detail:'Wi-Fi link to the arm controller',
+     kv:[['IP address','192.168.1.42'],['RSSI','-52 dBm'],['Heap free','188 KB'],['Uptime','04:12:07']]},
+    {name:'PCA9685 driver',   state:'ok',   detail:'16-channel PWM servo driver',
+     kv:[['I²C address','0x40'],['PWM frequency','50 Hz'],['Bus errors','0'],['Channels used','6 / 16']]},
+    {name:'Servo bank',       state:'warn', detail:'6 servos on the 5-DOF chain',
+     kv:[['Online','6 / 6'],['Bus voltage','5.94 V'],['Peak current','2.31 A'],['J3 temperature','58 °C']]},
+    {name:'Camera',           state:'ok',   detail:'Overhead USB camera on the belt',
+     kv:[['Device','CAM0 / video0'],['Resolution','640 × 480'],['Frame rate','15 fps'],['Dropped frames','3']]},
+    {name:'ML model',         state:'ok',   detail:'MobileNetV2, 3-class waste head',
+     kv:[['Model','waste_mnv2_v3.tflite'],['Input size','224 × 224'],['Inference','41 ms avg'],['Test accuracy','94.2 %']]},
+    {name:'Flask backend',    state:'ok',   detail:'REST API and sequencer',
+     kv:[['Endpoint','/api'],['Response time','18 ms'],['Requests served','12 480'],['Errors (1 h)','0']]}
+  ],
+
+  newDetection(){
+    const cat = CAT_KEYS[Math.floor(Math.random()*3)];
+    const c = CATS[cat];
+    const conf = +(Math.random()*Math.random() < 0.12
+      ? 62 + Math.random()*22           // occasional low-confidence frame
+      : 86 + Math.random()*13.4).toFixed(1);
+    return {
+      object: c.objects[Math.floor(Math.random()*c.objects.length)],
+      category: cat, confidence: conf, bin: c.bin,
+      latency: Math.round(34 + Math.random()*22),
+      frame: 'F' + String(++State.frameNo).padStart(5,'0'),
+      bbox: {x:26+Math.random()*34, y:30+Math.random()*24, w:16+Math.random()*13, h:20+Math.random()*14},
+      timestamp: new Date()
+    };
+  },
+
+  seedHistory(n){
+    const rows = []; let t = Date.now();
+    for(let i=0;i<n;i++){
+      const d = Mock.newDetection();
+      t -= 45000 + Math.random()*90000;
+      d.timestamp = new Date(t);
+      rows.push(Mock.toRow(d));
+    }
+    return rows;
+  },
+
+  toRow(d){
+    const low = d.confidence < State.threshold;
+    const roll = Math.random();
+    let status = 'Sorted', action = 'Pick → ' + d.bin;
+    if(low){ status = 'Rejected'; action = 'Pick → Reject chute'; }
+    else if(roll < 0.05){ status = 'Failed grip'; action = 'Pick aborted'; }
+    else if(roll < 0.11){ status = 'Retried'; action = 'Re-pick → ' + d.bin; }
+    return {...d, action, status};
+  },
+
+  buildAnalytics(){
+    const counts = {Plastic:0, Paper:0, Metal:0};
+    let ok = 0, fail = 0;
+    State.history.forEach(r => {
+      counts[r.category]++;
+      if(r.status === 'Sorted' || r.status === 'Retried') ok++; else fail++;
+    });
+    const hourly = [];
+    for(let h=8; h<=18; h++) hourly.push({label:String(h).padStart(2,'0'), value:Math.round(6+Math.random()*22)});
+    return {
+      counts, ok, fail,
+      total: State.history.length,
+      accuracy: 94.2,
+      perClass: [
+        {label:'Plastic', value:96.1, color:CATS.Plastic.color},
+        {label:'Paper',   value:93.4, color:CATS.Paper.color},
+        {label:'Metal',   value:92.8, color:CATS.Metal.color}
+      ],
+      outcome: [
+        {label:'Plastic', ok:97, fail:3},
+        {label:'Paper',   ok:91, fail:9},
+        {label:'Metal',   ok:95, fail:5}
+      ],
+      hourly
+    };
+  }
+};
+
+/* ==============================================================
+   4. STATE
+   ============================================================== */
+const State = {
+  view:'dashboard',
+  mode:'AUTOMATIC',
+  estop:false,
+  connected:true,
+  operation:'Ready',
+  poseName:'Home',
+  joints:Object.fromEntries(JOINTS.map(j => [j.id, j.home])),
+  detection:null,
+  history:[],
+  frameNo:1042,
+  threshold:85,
+  servoSpeed:100,
+  autoSort:true,
+  cycleCount:0,
+  bins:{Plastic:34, Paper:58, Metal:21},
+  histFilter:'all',
+  histQuery:'',
+  startedAt:Date.now(),
+  cmdLog:[],
+  sysLog:[]
+};
+
+/* ==============================================================
+   5. HELPERS
+   ============================================================== */
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const clamp = (v,a,b) => Math.min(b, Math.max(a, v));
+const rad = d => d * Math.PI / 180;
+const hhmmss = d => d.toTimeString().slice(0,8);
+const dateTime = d => d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) + ' ' + hhmmss(d);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function statusPill(s){
+  const map = {'Sorted':'ok','Retried':'warn','Rejected':'warn','Failed grip':'bad'};
+  return `<span class="pill ${map[s]||'ok'}">${s}</span>`;
+}
+function catPill(c){
+  return `<span class="pill ${CATS[c].key}"><i class="pill-dot"></i>${c}</span>`;
+}
+
+function log(target, tag, msg){
+  const entry = {t:hhmmss(new Date()), tag, msg};
+  State[target].unshift(entry);
+  if(State[target].length > 60) State[target].pop();
+  renderLog(target);
+}
+function renderLog(target){
+  const el = target === 'cmdLog' ? $('#cmdLog') : $('#sysLog');
+  if(!el) return;
+  el.innerHTML = State[target].map(e =>
+    `<div class="console-line"><span class="console-t">${e.t}</span>` +
+    `<span class="console-tag ${e.tag[0].toLowerCase()}">${e.tag}</span>` +
+    `<span class="console-msg">${esc(e.msg)}</span></div>`).join('') ||
+    '<div class="console-msg">No entries yet.</div>';
+}
+
+/* ==============================================================
+   6. FORWARD KINEMATICS + ARM RENDERING
+   Side elevation is driven by shoulder / elbow / wrist pitch;
+   the top view carries base yaw; the jaw carries gripper + roll.
+   ============================================================== */
+const LINK = {l1:62, l2:54, l3:24, ox:86, oy:152};
+const FLOOR = 210, BELT_Y = 174;
+
+function solveArm(j){
+  const a1 = j.shoulder;
+  const a2 = a1 - j.elbow;
+  const a3 = a2 - j.wristPitch;
+  const p0 = {x:LINK.ox, y:LINK.oy};
+  const p1 = {x:p0.x + LINK.l1*Math.cos(rad(a1)), y:p0.y - LINK.l1*Math.sin(rad(a1))};
+  const p2 = {x:p1.x + LINK.l2*Math.cos(rad(a2)), y:p1.y - LINK.l2*Math.sin(rad(a2))};
+  const p3 = {x:p2.x + LINK.l3*Math.cos(rad(a3)), y:p2.y - LINK.l3*Math.sin(rad(a3))};
+  return {p0,p1,p2,p3,a3};
+}
+
+function armSVG(j){
+  const {p0,p1,p2,p3,a3} = solveArm(j);
+  const jaw = 4 + (j.gripper/90)*15;
+  const nx = -Math.sin(rad(a3)), ny = -Math.cos(rad(a3));
+  const jawA = {x:p3.x + nx*jaw, y:p3.y + ny*jaw};
+  const jawB = {x:p3.x - nx*jaw, y:p3.y - ny*jaw};
+  const tipA = {x:jawA.x + Math.cos(rad(a3))*13, y:jawA.y - Math.sin(rad(a3))*13};
+  const tipB = {x:jawB.x + Math.cos(rad(a3))*13, y:jawB.y - Math.sin(rad(a3))*13};
+  const held = State.carrying;
+  const cat  = State.detection ? CATS[State.detection.category] : null;
+
+  const link = (a,b,w,c) => `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`;
+  const pivot = (p,r) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="#FFFFFF" stroke="#546070" stroke-width="2.5"/>`;
+
+  const R = LINK.l1 + LINK.l2 + LINK.l3;
+  const BINS = [[250,'#1D6FE0','A','Plastic'],[288,'#B9760B','B','Paper'],[326,'#546070','C','Metal']];
+
+  return `
+<svg viewBox="0 0 360 232" role="img" aria-label="Side elevation of the manipulator">
+  <defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#7C8899"/><stop offset="1" stop-color="#5C6773"/>
+  </linearGradient></defs>
+
+  <!-- reach envelope (upper-right quadrant of the workspace) -->
+  <path d="M ${LINK.ox} ${LINK.oy - R} A ${R} ${R} 0 0 1 ${LINK.ox + R} ${LINK.oy}"
+        fill="none" stroke="#DDE3EA" stroke-width="1.5" stroke-dasharray="3 5"/>
+
+  <!-- conveyor belt -->
+  <rect x="160" y="${BELT_Y}" width="76" height="7" rx="3" fill="#CDD5DD"/>
+  <rect x="160" y="${BELT_Y+7}" width="76" height="4" fill="#B8C2CD" opacity=".7"/>
+  ${!held && cat ? `<rect x="203" y="${BELT_Y-13}" width="13" height="13" rx="2" fill="${cat.color}" opacity=".85"/>` : ''}
+
+  <!-- floor + bins -->
+  <line x1="8" y1="${FLOOR}" x2="352" y2="${FLOOR}" stroke="#CFD7E0" stroke-width="2"/>
+  ${BINS.map(([x,c,n,k]) => {
+    const fill = 30 * (State.bins[k]/100);
+    return `<rect x="${x}" y="${FLOOR-fill}" width="26" height="${fill.toFixed(1)}" fill="${c}" opacity=".2"/>
+    <rect x="${x}" y="${FLOOR-30}" width="26" height="30" rx="4" fill="none" stroke="${c}" stroke-width="2"/>
+    <text x="${x+13}" y="${FLOOR-10}" font-family="JetBrains Mono, monospace" font-size="12" font-weight="700" fill="${c}" text-anchor="middle">${n}</text>`;
+  }).join('')}
+
+  <!-- pedestal -->
+  <rect x="${LINK.ox-26}" y="${FLOOR-14}" width="52" height="14" rx="4" fill="url(#lg)"/>
+  <rect x="${LINK.ox-13}" y="${LINK.oy}" width="26" height="${FLOOR-14-LINK.oy}" fill="#8A94A0"/>
+
+  <!-- links -->
+  ${link(p0,p1,11,'#6E7A88')}
+  ${link(p1,p2,9,'#7C8899')}
+  ${link(p2,p3,6,'#8A94A0')}
+  ${pivot(p0,7)}${pivot(p1,6)}${pivot(p2,5)}
+
+  <!-- gripper jaws -->
+  ${link(jawA,tipA,4,'#14181D')}
+  ${link(jawB,tipB,4,'#14181D')}
+  ${link(jawA,jawB,3,'#546070')}
+
+  ${held && cat ? `<rect x="${(p3.x+Math.cos(rad(a3))*9-5).toFixed(1)}" y="${(p3.y-Math.sin(rad(a3))*9-5).toFixed(1)}" width="10" height="10" rx="2" fill="${cat.color}"/>` : ''}
+
+  <!-- TCP crosshair -->
+  <circle cx="${p3.x.toFixed(1)}" cy="${p3.y.toFixed(1)}" r="2.5" fill="#1D6FE0"/>
+</svg>`;
+}
+
+function topSVG(j){
+  const a = rad(-j.base + 90);
+  const cx = 120, cy = 122, r = 84;
+  const tx = cx + Math.cos(a)*r, ty = cy - Math.sin(a)*r;
+  const sector = (deg, color, label) => {
+    const t = rad(-deg + 90);
+    return `<circle cx="${(cx+Math.cos(t)*r).toFixed(1)}" cy="${(cy-Math.sin(t)*r).toFixed(1)}" r="13" fill="none" stroke="${color}" stroke-width="2"/>
+            <text x="${(cx+Math.cos(t)*r).toFixed(1)}" y="${(cy-Math.sin(t)*r+4).toFixed(1)}" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700" fill="${color}" text-anchor="middle">${label}</text>`;
+  };
+  return `
+<svg viewBox="0 0 240 180" role="img" aria-label="Top view of base rotation">
+  <path d="M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}" fill="none" stroke="#DDE3EA" stroke-width="2"/>
+  ${[-90,-45,0,45,90].map(d => {
+    const t = rad(-d+90);
+    return `<line x1="${(cx+Math.cos(t)*(r-8)).toFixed(1)}" y1="${(cy-Math.sin(t)*(r-8)).toFixed(1)}" x2="${(cx+Math.cos(t)*r).toFixed(1)}" y2="${(cy-Math.sin(t)*r).toFixed(1)}" stroke="#CFD7E0" stroke-width="2"/>`;
+  }).join('')}
+  ${sector(62,'#1D6FE0','A')}${sector(0,'#B9760B','B')}${sector(-62,'#546070','C')}
+  <line x1="${cx}" y1="${cy}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="#1D6FE0" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="${cx}" cy="${cy}" r="9" fill="#fff" stroke="#546070" stroke-width="3"/>
+  <text x="${cx}" y="${cy+34}" font-family="JetBrains Mono, monospace" font-size="15" font-weight="700" fill="#14181D" text-anchor="middle">${j.base.toFixed(1)}°</text>
+  <text x="${cx}" y="${cy+48}" font-family="Inter, sans-serif" font-size="10" fill="#8A94A0" text-anchor="middle" letter-spacing="1">BASE YAW</text>
+</svg>`;
+}
+
+function renderArm(){
+  const s = armSVG(State.joints);
+  const dash = $('#stageDash'), ctl = $('#stageCtl'), top = $('#stageTop');
+  if(dash) dash.innerHTML = s;
+  if(ctl)  ctl.innerHTML  = s;
+  if(top)  top.innerHTML  = topSVG(State.joints);
+  const {p3} = solveArm(State.joints);
+  const tcp = $('#tcpRead');
+  if(tcp) tcp.textContent = `TCP  X ${((p3.x-LINK.ox)*2.4).toFixed(0)} mm   Z ${((LINK.oy-p3.y)*2.4).toFixed(0)} mm`;
+}
+
+/* ==============================================================
+   7. MOTION ENGINE  (interpolates joints; also used by manual UI)
+   ============================================================== */
+const Motion = {
+  token:0,
+  goto(target, ms){
+    const id = ++this.token;
+    const from = {...State.joints};
+    const start = performance.now();
+    const dur = ms * (100 / Math.max(20, State.servoSpeed));
+    return new Promise(resolve => {
+      const step = now => {
+        if(id !== this.token || State.estop) return resolve(false);
+        const k = clamp((now - start) / dur, 0, 1);
+        const e = k < .5 ? 2*k*k : 1 - Math.pow(-2*k+2, 2)/2;   // ease-in-out
+        for(const key in target) State.joints[key] = from[key] + (target[key]-from[key])*e;
+        renderArm(); syncJointUI();
+        k < 1 ? requestAnimationFrame(step) : resolve(true);
+      };
+      requestAnimationFrame(step);
+    });
+  },
+  halt(){ this.token++; }
+};
+
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const HOME = Object.fromEntries(JOINTS.map(j => [j.id, j.home]));
+
+/* ==============================================================
+   8. RENDERERS
+   ============================================================== */
+function renderConnChip(){
+  const chip = $('#chipConn'); if(!chip) return;
+  if(State.estop){
+    chip.className = 'chip bad';
+    chip.innerHTML = '<i class="lamp bad"></i> Motion halted · <b>ESP32</b>';
+  } else if(!Net.online){
+    chip.className = 'chip warn';
+    chip.innerHTML = '<i class="lamp warn live"></i> Backend unreachable · <b>simulated</b>';
+  } else {
+    chip.className = 'chip ok';
+    chip.innerHTML = '<i class="lamp ok live"></i> Robot connected · <b>ESP32</b>';
+  }
+}
+
+function setOperation(op, pose){
+  State.operation = op;
+  if(pose) State.poseName = pose;
+  const s = $('#dashStatus'), sub = $('#dashStatusSub'), pn = $('#poseName');
+  if(s) s.textContent = op;
+  if(pn) pn.textContent = State.poseName;
+  if(sub){
+    const busy = op !== 'Ready';
+    sub.innerHTML = `<i class="lamp ${State.estop?'bad':busy?'warn':'ok'} ${busy&&!State.estop?'live':''}"></i> ` +
+      (State.estop ? 'Halted by emergency stop' : busy ? 'Cycle in progress' : 'Idle at home pose');
+  }
+}
+
+function renderJointReadout(){
+  const el = $('#jointReadout'); if(!el) return;
+  el.innerHTML = JOINTS.map(j => {
+    const v = State.joints[j.id];
+    const pct = ((v - j.min) / (j.max - j.min)) * 100;
+    const zero = ((0 - j.min) / (j.max - j.min)) * 100;
+    const l = Math.min(pct, zero), w = Math.abs(pct - zero);
+    return `<div class="jrow">
+      <span class="jrow-name">${j.name}</span>
+      <span class="jrow-val">${v.toFixed(1)}°</span>
+      <span class="jbar"><i style="left:${l}%;width:${Math.max(w,1.5)}%"></i></span>
+    </div>`;
+  }).join('');
+}
+
+function renderJointControls(){
+  const el = $('#jointControls'); if(!el) return;
+  el.innerHTML = JOINTS.map(j => `
+    <div class="jctl">
+      <div class="jctl-top">
+        <span class="jctl-label">${j.name}</span>
+        <span class="jctl-axis">${j.axis} · ch${j.ch}</span>
+        <span class="jctl-read" id="read-${j.id}">${State.joints[j.id].toFixed(1)}<small>°</small></span>
+      </div>
+      <div class="jctl-row">
+        <button class="step jstep" data-joint="${j.id}" data-delta="-5" aria-label="Decrease ${j.name}">−</button>
+        <input type="range" class="jslider" data-joint="${j.id}" min="${j.min}" max="${j.max}" step="0.5" value="${State.joints[j.id]}" aria-label="${j.name} angle">
+        <button class="step jstep" data-joint="${j.id}" data-delta="5" aria-label="Increase ${j.name}">+</button>
+      </div>
+      <div class="jctl-limits"><span>${j.min}°</span><span>${j.max}°</span></div>
+    </div>`).join('');
+  bindJointControls();
+}
+
+function syncJointUI(){
+  renderJointReadout();
+  JOINTS.forEach(j => {
+    const r = $('#read-' + j.id), s = document.querySelector(`.jslider[data-joint="${j.id}"]`);
+    if(r) r.innerHTML = State.joints[j.id].toFixed(1) + '<small>°</small>';
+    if(s && document.activeElement !== s) s.value = State.joints[j.id];
+  });
+}
+
+function setManualEnabled(on){
+  $$('.jslider').forEach(s => s.disabled = !on);
+  $$('.jstep').forEach(b => b.disabled = !on);
+  $$('[data-cmd]').forEach(b => b.disabled = !on && b.dataset.cmd !== 'stop');
+  const note = $('#modeNote');
+  if(note) note.style.display = on ? 'none' : 'flex';
+}
+
+function renderDetection(d){
+  State.detection = d;
+  const c = CATS[d.category];
+  const low = d.confidence < State.threshold;
+
+  $('#dashObject').textContent = d.object;
+  $('#dashObjectSub').textContent = `Frame ${d.frame} · ${d.latency} ms inference`;
+  $('#dashConf').textContent = d.confidence.toFixed(1) + '%';
+  $('#dashConfSub').innerHTML = low
+    ? `<i class="lamp warn"></i> Below ${State.threshold}% threshold`
+    : `<i class="lamp ok"></i> Above ${State.threshold}% threshold`;
+  $('#dashBin').textContent = low ? 'Reject chute' : `${d.category} · ${d.bin}`;
+  $('#dashBinSub').textContent = low ? 'Confidence too low to sort' : `Base rotates to ${c.baseAngle}°`;
+
+  $('#detObject').textContent = d.object;
+  $('#detConf').textContent = d.confidence.toFixed(1) + '%';
+  $('#detCat').textContent = d.category;
+  $('#detBin').textContent = low ? 'Reject chute' : d.bin;
+  $('#detStamp').textContent = dateTime(d.timestamp);
+  $('#detLatency').textContent = d.latency + ' ms';
+  $('#detFrame').textContent = d.frame;
+  $('#detCatWrap').innerHTML = catPill(d.category);
+
+  const arc = $('#ringArc');
+  const C = 2 * Math.PI * 44;
+  arc.style.strokeDashoffset = C * (1 - d.confidence/100);
+  arc.setAttribute('stroke', low ? '#B9760B' : '#16874F');
+
+  [['#bboxDash','#ghostDash'], ['#bboxDet','#ghostDet']].forEach(([bs, gs]) => {
+    const b = $(bs), g = $(gs); if(!b) return;
+    b.style.display = 'block';
+    b.style.left = d.bbox.x + '%'; b.style.top = d.bbox.y + '%';
+    b.style.width = d.bbox.w + '%'; b.style.height = d.bbox.h + '%';
+    b.className = 'bbox cat-' + c.key;
+    b.querySelector('.bbox-tag').textContent = `${d.category} ${d.confidence.toFixed(1)}%`;
+    g.style.left = (d.bbox.x+3) + '%'; g.style.top = (d.bbox.y+3) + '%';
+    g.style.width = (d.bbox.w-6) + '%'; g.style.height = (d.bbox.h-6) + '%';
+  });
+
+  const st = hhmmss(d.timestamp);
+  $('#camStampDash').textContent = st;
+  $('#camStampDet').textContent = st;
+}
+
+function feedItem(r){
+  const c = CATS[r.category];
+  return `<div class="feed-item">
+    <div class="feed-icon ${c.key}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+    </div>
+    <div class="feed-main">
+      <div class="feed-title">${esc(r.object)}</div>
+      <div class="feed-meta">${catPill(r.category)}<span class="mono">${r.confidence.toFixed(1)}%</span><span>→ ${r.bin}</span>${statusPill(r.status)}</div>
+    </div>
+    <span class="feed-time">${hhmmss(r.timestamp)}</span>
+  </div>`;
+}
+
+function renderFeeds(){
+  const d = $('#feedDash'), t = $('#feedDet');
+  const rows = State.history.slice(0, 8);
+  if(d) d.innerHTML = rows.slice(0,6).map(feedItem).join('') ||
+    '<div class="empty"><b>No activity yet</b>Start automatic mode to begin sorting.</div>';
+  if(t) t.innerHTML = rows.map(feedItem).join('') ||
+    '<div class="empty"><b>No detections yet</b>Run a detection to populate this list.</div>';
+}
+
+function renderStats(){
+  const c = {Plastic:0, Paper:0, Metal:0};
+  State.history.forEach(r => c[r.category]++);
+  $('#sPlastic').textContent = c.Plastic;
+  $('#sPaper').textContent   = c.Paper;
+  $('#sMetal').textContent   = c.Metal;
+
+  $('#binMeters').innerHTML = CAT_KEYS.map(k => {
+    const v = State.bins[k], col = CATS[k].color;
+    const warn = v > 80;
+    return `<div class="meter">
+      <div class="meter-top">${catPill(k)}<span style="color:var(--muted)">${CATS[k].bin}</span><b style="color:${warn?'var(--amber-ink)':'inherit'}">${v}%</b></div>
+      <div class="meter-track"><i style="width:${v}%;background:${warn?'#B9760B':col}"></i></div>
+    </div>`;
+  }).join('');
+}
+
+function renderCatCards(){
+  const el = $('#catCards'); if(!el) return;
+  const c = {Plastic:0, Paper:0, Metal:0};
+  State.history.forEach(r => c[r.category]++);
+  el.innerHTML = CAT_KEYS.map(k => {
+    const cat = CATS[k], active = State.detection && State.detection.category === k;
+    return `<div class="card" style="${active?`border-color:${cat.color};box-shadow:var(--sh-2)`:''}">
+      <div class="card-body" style="display:flex;align-items:center;gap:13px">
+        <div class="feed-icon ${cat.key}" style="width:38px;height:38px;border-radius:10px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 11v5M14 11v5"/></svg>
+        </div>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:14px">${k}</div>
+          <div style="font-size:11.5px;color:var(--muted)">Routed to ${cat.bin} · base ${cat.baseAngle}°</div>
+        </div>
+        <div style="text-align:right">
+          <div class="mono" style="font-size:19px;font-weight:700;color:${cat.color}">${c[k]}</div>
+          <div class="eyebrow">items</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderHistory(){
+  const q = State.histQuery.toLowerCase(), f = State.histFilter;
+  const rows = State.history.filter(r => {
+    if(f === 'failed' && r.status === 'Sorted') return false;
+    if(f !== 'all' && f !== 'failed' && r.category !== f) return false;
+    return !q || r.object.toLowerCase().includes(q) || r.bin.toLowerCase().includes(q);
+  });
+  $('#histBody').innerHTML = rows.map(r => `<tr>
+    <td class="mono" style="color:var(--muted)">${dateTime(r.timestamp)}</td>
+    <td class="td-strong">${esc(r.object)}</td>
+    <td>${catPill(r.category)}</td>
+    <td class="mono">${r.confidence.toFixed(1)}%</td>
+    <td>${r.confidence < State.threshold ? 'Reject chute' : r.bin}</td>
+    <td style="color:var(--muted)">${r.action}</td>
+    <td>${statusPill(r.status)}</td>
+  </tr>`).join('') ||
+    `<tr><td colspan="7"><div class="empty"><b>Nothing matches that filter</b>Clear the search box or pick another category.</div></td></tr>`;
+  $('#histCount').textContent = `${rows.length} of ${State.history.length} records`;
+}
+
+function renderSystem(){
+  const el = $('#sysGrid'); if(!el) return;
+  el.innerHTML = Mock.subsystems.map(s => {
+    const label = {ok:'Online', warn:'Degraded', bad:'Offline'}[s.state];
+    return `<div class="card sys">
+      <div class="sys-top">
+        <i class="lamp ${s.state} ${s.state==='ok'?'live':''}"></i>
+        <span class="sys-name">${s.name}</span>
+        <span class="pill ${s.state==='ok'?'ok':s.state==='warn'?'warn':'bad'}" style="margin-left:auto">${label}</span>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:9px">${s.detail}</div>
+      ${s.kv.map(([k,v]) => `<div class="sys-kv"><span>${k}</span><b>${v}</b></div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+/* ==============================================================
+   9. CHARTS  (hand-drawn SVG, no external library)
+   ============================================================== */
+function chartBars(el, data){
+  const w = 100, max = Math.max(...data.map(d => d.value)) * 1.15;
+  const bw = w / data.length;
+  el.innerHTML = `<svg class="chart" viewBox="0 0 100 46" preserveAspectRatio="none" style="height:170px">
+    ${[0,.25,.5,.75,1].map(g => `<line x1="0" y1="${(36*g+2).toFixed(1)}" x2="100" y2="${(36*g+2).toFixed(1)}" stroke="#E3E8EE" stroke-width=".3"/>`).join('')}
+    ${data.map((d,i) => {
+      const h = (d.value/max)*36;
+      return `<rect x="${(i*bw+bw*.22).toFixed(2)}" y="${(38-h).toFixed(2)}" width="${(bw*.56).toFixed(2)}" height="${h.toFixed(2)}" rx=".8" fill="#1D6FE0" opacity="${.55 + .45*(d.value/max)}"><title>${d.label}:00 — ${d.value} items</title></rect>`;
+    }).join('')}
+  </svg>
+  <div style="display:flex;justify-content:space-between;margin-top:6px;font-family:var(--ff-mono);font-size:10.5px;color:var(--faint)">
+    ${data.map(d => `<span>${d.label}</span>`).join('')}
+  </div>`;
+}
+
+function chartDonut(el, legendEl, data){
+  const total = data.reduce((s,d) => s + d.value, 0) || 1;
+  const r = 54, C = 2*Math.PI*r;
+  let off = 0;
+  el.innerHTML = `<svg width="150" height="150" viewBox="0 0 150 150">
+    <g transform="rotate(-90 75 75)">
+      <circle cx="75" cy="75" r="${r}" fill="none" stroke="#EEF1F5" stroke-width="20"/>
+      ${data.map(d => {
+        const len = (d.value/total)*C;
+        const seg = `<circle cx="75" cy="75" r="${r}" fill="none" stroke="${d.color}" stroke-width="20"
+          stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"><title>${d.label}: ${d.value}</title></circle>`;
+        off += len; return seg;
+      }).join('')}
+    </g>
+    <text x="75" y="72" font-family="JetBrains Mono, monospace" font-size="24" font-weight="700" fill="#14181D" text-anchor="middle">${total}</text>
+    <text x="75" y="88" font-family="Inter, sans-serif" font-size="10" fill="#8A94A0" text-anchor="middle" letter-spacing="1">ITEMS</text>
+  </svg>`;
+  legendEl.innerHTML = data.map(d => `<div class="legend-row">
+    <span class="legend-key" style="background:${d.color}"></span>
+    <span>${d.label}</span><b>${d.value} · ${((d.value/total)*100).toFixed(0)}%</b></div>`).join('');
+}
+
+function chartHBars(el, data, suffix='%'){
+  el.innerHTML = data.map(d => `<div class="meter">
+    <div class="meter-top"><span style="font-weight:600">${d.label}</span><b>${d.value.toFixed(1)}${suffix}</b></div>
+    <div class="meter-track"><i style="width:${d.value}%;background:${d.color}"></i></div>
+  </div>`).join('');
+}
+
+function chartOutcome(el, data){
+  el.innerHTML = data.map(d => `<div class="meter">
+    <div class="meter-top"><span style="font-weight:600">${d.label}</span>
+      <span style="color:var(--muted);font-size:11.5px">${d.ok} sorted · ${d.fail} failed</span>
+      <b>${((d.ok/(d.ok+d.fail))*100).toFixed(0)}%</b></div>
+    <div class="meter-track" style="display:flex">
+      <i style="width:${(d.ok/(d.ok+d.fail))*100}%;background:#16874F;border-radius:4px 0 0 4px"></i>
+      <i style="width:${(d.fail/(d.ok+d.fail))*100}%;background:#C62828;border-radius:0 4px 4px 0"></i>
+    </div>
+  </div>`).join('');
+}
+
+async function renderAnalytics(){
+  const a = await API.getAnalytics();
+  $('#aTotal').textContent = a.total;
+  $('#aOk').textContent    = a.ok;
+  $('#aFail').textContent  = a.fail;
+  $('#aAcc').textContent   = a.accuracy.toFixed(1) + '%';
+  $('#aTotalDelta').textContent = `${a.hourly.at(-1).value} in the last hour`;
+  $('#aOkDelta').textContent    = `${((a.ok/Math.max(a.total,1))*100).toFixed(1)}% of all cycles`;
+  $('#aFailDelta').textContent  = `${((a.fail/Math.max(a.total,1))*100).toFixed(1)}% of all cycles`;
+
+  chartBars($('#chartHourly'), a.hourly);
+  chartDonut($('#chartDonut'), $('#donutLegend'),
+    CAT_KEYS.map(k => ({label:k, value:a.counts[k], color:CATS[k].color})));
+  chartHBars($('#chartAcc'), a.perClass);
+  chartOutcome($('#chartOutcome'), a.outcome);
+}
+
+/* ==============================================================
+   10. SORTING SEQUENCE  (automatic pick-and-place cycle)
+   ============================================================== */
+const POSE = {
+  approach:{shoulder:36, elbow:72, wristPitch:-26, gripper:72},
+  grip:    {shoulder:26, elbow:60, wristPitch:-20, gripper:10},
+  lift:    {shoulder:76, elbow:96, wristPitch:-24, gripper:10},
+  release: {shoulder:52, elbow:70, wristPitch:-18, gripper:78}
+};
+
+async function runCycle(d){
+  const c = CATS[d.category];
+  const low = d.confidence < State.threshold;
+  const target = low ? 90 : c.baseAngle;
+
+  setOperation('Approaching object', 'Approach');
+  if(!(await Motion.goto({base:0, ...POSE.approach}, 900))) return;
+  if(!(await Motion.goto(POSE.grip, 700))) return;
+  setOperation('Closing gripper', 'Grip');
+  State.carrying = true;
+  await wait(220);
+  setOperation('Lifting object', 'Lift');
+  if(!(await Motion.goto(POSE.lift, 700))) return;
+  setOperation(low ? 'Transferring to reject chute' : `Transferring to ${d.category} bin`, 'Transfer');
+  if(!(await Motion.goto({base:target, wristRoll:low?0:c.baseAngle/2}, 1100))) return;
+  setOperation('Releasing object', 'Release');
+  if(!(await Motion.goto(POSE.release, 600))) return;
+  State.carrying = false;
+  await wait(200);
+  setOperation('Returning home', 'Home');
+  if(!(await Motion.goto(HOME, 950))) return;
+  setOperation('Ready', 'Home');
+
+  const row = Mock.toRow(d);
+  State.history.unshift(row);
+  if(State.history.length > 120) State.history.pop();
+  if(!low){
+    State.bins[d.category] = Math.min(100, State.bins[d.category] + 1);
+    if(State.bins[d.category] > 80) log('sysLog','WARN', `${d.category} bin is ${State.bins[d.category]}% full — schedule emptying.`);
+  }
+  State.cycleCount++;
+  $('#chipCycleVal').textContent = '#' + String(State.cycleCount).padStart(4,'0');
+  log('cmdLog','INFO', `Cycle complete — ${row.object} → ${row.status}`);
+  refreshAll();
+}
+
+let cycleTimer = null;
+function startAuto(){
+  stopAuto();
+  cycleTimer = setInterval(async () => {
+    if(State.estop || State.mode !== 'AUTOMATIC' || State.operation !== 'Ready') return;
+    const d = await API.getDetection();
+    renderDetection(d);
+    log('cmdLog','INFO', `Detected ${d.object} (${d.confidence.toFixed(1)}%)`);
+    if(State.autoSort) runCycle(d);
+  }, 2500);
+}
+function stopAuto(){ if(cycleTimer) clearInterval(cycleTimer); cycleTimer = null; }
+
+function refreshAll(){
+  renderFeeds(); renderStats(); renderHistory(); renderCatCards(); renderArm(); syncJointUI();
+  if(State.view === 'analytics') renderAnalytics();
+}
+
+/* ==============================================================
+   11. EVENT WIRING
+   ============================================================== */
+function go(view){
+  State.view = view;
+  $$('.view').forEach(v => v.classList.toggle('is-active', v.id === 'view-' + view));
+  $$('.nav-item').forEach(b => b.classList.toggle('is-active', b.dataset.view === view));
+  if(view === 'analytics') renderAnalytics();
+  if(view === 'system') renderSystem();
+  renderArm();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function bindJointControls(){
+  $$('.jslider').forEach(s => s.addEventListener('input', e => {
+    const id = e.target.dataset.joint;
+    State.joints[id] = parseFloat(e.target.value);
+    Motion.halt();
+    renderArm(); syncJointUI();
+    API.setJoint(id, State.joints[id]);
+  }));
+  $$('.jslider').forEach(s => s.addEventListener('change', e => {
+    const j = JOINTS.find(x => x.id === e.target.dataset.joint);
+    log('cmdLog','INFO', `setJoint(${j.id}, ${State.joints[j.id].toFixed(1)}°) → ch${j.ch}`);
+  }));
+  $$('.jstep').forEach(b => b.addEventListener('click', () => {
+    const j = JOINTS.find(x => x.id === b.dataset.joint);
+    State.joints[j.id] = clamp(State.joints[j.id] + parseFloat(b.dataset.delta), j.min, j.max);
+    Motion.halt(); renderArm(); syncJointUI();
+    API.setJoint(j.id, State.joints[j.id]);
+    log('cmdLog','INFO', `setJoint(${j.id}, ${State.joints[j.id].toFixed(1)}°) → ch${j.ch}`);
+  }));
+  setManualEnabled(State.mode === 'MANUAL' && !State.estop);
+}
+
+function setMode(mode){
+  State.mode = mode;
+  $$('#modeSeg button').forEach(b => b.classList.toggle('is-on', b.dataset.mode === mode));
+  $('#chipModeVal').textContent = mode;
+  $('#chipMode').className = 'chip ' + (mode === 'AUTOMATIC' ? 'ok' : 'blue');
+  $('#navBadge').textContent = mode === 'AUTOMATIC' ? 'live' : 'idle';
+  setManualEnabled(mode === 'MANUAL' && !State.estop);
+  API.setMode(mode);
+  log('cmdLog','INFO', `setMode(${mode})`);
+  log('sysLog','INFO', `Operating mode changed to ${mode}.`);
+  if(mode === 'AUTOMATIC' && !State.estop) startAuto();
+  else { stopAuto(); Motion.halt(); setOperation('Ready','Home'); }
+}
+
+async function handleCommand(cmd){
+  if(State.estop && cmd !== 'stop') return;
+  log('cmdLog','INFO', `sendCommand("${cmd}")`);
+  API.sendCommand(cmd);
+  if(cmd === 'stop'){ Motion.halt(); setOperation('Motion stopped','Held'); log('cmdLog','WARN','Motion halted by operator.'); return; }
+  if(cmd === 'home'){ setOperation('Returning home','Home'); await Motion.goto(HOME, 900); setOperation('Ready','Home'); return; }
+  if(cmd === 'gripper_open'){  setOperation('Opening gripper','Open');  await Motion.goto({gripper:80}, 420); setOperation('Ready'); return; }
+  if(cmd === 'gripper_close'){ setOperation('Closing gripper','Closed'); await Motion.goto({gripper:8}, 420);  setOperation('Ready'); return; }
+  if(cmd === 'pick'){
+    setOperation('Picking','Approach');
+    await Motion.goto({base:0, ...POSE.approach}, 800);
+    await Motion.goto(POSE.grip, 600);
+    State.carrying = true;
+    await Motion.goto(POSE.lift, 700);
+    setOperation('Ready','Lift'); renderArm(); return;
+  }
+  if(cmd === 'drop'){
+    setOperation('Dropping','Release');
+    await Motion.goto(POSE.release, 600);
+    State.carrying = false; renderArm();
+    await Motion.goto(HOME, 800);
+    setOperation('Ready','Home'); return;
+  }
+}
+
+function setEstop(on){
+  State.estop = on;
+  $('#app').classList.toggle('is-estopped', on);
+  $('#estopBtn').classList.toggle('is-latched', on);
+  renderConnChip();
+  API.emergencyStop(on);
+  if(on){
+    Motion.halt(); stopAuto(); State.carrying = false;
+    setOperation('Emergency stop','Held');
+    setManualEnabled(false);
+    log('cmdLog','ERROR','Emergency stop engaged — PWM outputs disabled.');
+    log('sysLog','ERROR','E-STOP latched. Servo bus de-energised.');
+  } else {
+    log('cmdLog','SUCCESS','Emergency stop released — returning to home pose.');
+    log('sysLog','SUCCESS','E-STOP cleared. Servo bus re-energised.');
+    setOperation('Returning home','Home');
+    Motion.goto(HOME, 900).then(() => {
+      setOperation('Ready','Home');
+      setManualEnabled(State.mode === 'MANUAL');
+      if(State.mode === 'AUTOMATIC') startAuto();
+    });
+  }
+}
+
+function bindEvents(){
+  $$('.nav-item').forEach(b => b.addEventListener('click', () => go(b.dataset.view)));
+  $$('[data-goto]').forEach(b => b.addEventListener('click', () => go(b.dataset.goto)));
+  $$('#modeSeg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  $$('[data-cmd]').forEach(b => b.addEventListener('click', () => handleCommand(b.dataset.cmd)));
+
+  $('#estopBtn').addEventListener('click', () => setEstop(!State.estop));
+  $('#estopReset').addEventListener('click', () => setEstop(false));
+  $('#clearLog').addEventListener('click', () => { State.cmdLog = []; renderLog('cmdLog'); });
+
+  $('#btnDetect').addEventListener('click', async () => {
+    if(State.estop) return;
+    const d = await API.getDetection();
+    renderDetection(d);
+    log('cmdLog','INFO', `Manual detection — ${d.object} (${d.confidence.toFixed(1)}%)`);
+    State.history.unshift(Mock.toRow(d));
+    refreshAll();
+  });
+
+  $('#histSearch').addEventListener('input', e => { State.histQuery = e.target.value; renderHistory(); });
+  $$('[data-filter]').forEach(b => b.addEventListener('click', () => {
+    $$('[data-filter]').forEach(x => x.classList.remove('is-on'));
+    b.classList.add('is-on');
+    State.histFilter = b.dataset.filter;
+    renderHistory();
+  }));
+
+  $('#btnExport').addEventListener('click', () => {
+    const head = 'timestamp,object,category,confidence,bin,action,status\n';
+    const body = State.history.map(r =>
+      [dateTime(r.timestamp), r.object, r.category, r.confidence, r.bin, r.action, r.status].join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([head + body], {type:'text/csv'}));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'segrebot-activity.csv'; a.click();
+    URL.revokeObjectURL(url);
+    log('sysLog','INFO','Activity history exported to CSV.');
+  });
+
+  $('#btnPing').addEventListener('click', () => { renderSystem(); log('sysLog','INFO','Health check complete — 6 subsystems polled.'); });
+
+  // settings
+  $('#thrRange').addEventListener('input', e => {
+    State.threshold = +e.target.value;
+    $('#thrVal').textContent = State.threshold + '%';
+    $('#dashConfSub').innerHTML = `<i class="lamp ok"></i> Threshold ${State.threshold}.0%`;
+  });
+  $('#spdRange').addEventListener('input', e => {
+    State.servoSpeed = +e.target.value;
+    $('#spdVal').textContent = State.servoSpeed + '%';
+  });
+  $('#setBase').addEventListener('change', e => { API.BASE_URL = e.target.value.trim(); });
+
+  const toggles = {tglMock:'USE_MOCK', tglAuto:'autoSort', tglVerbose:'verbose'};
+  Object.keys(toggles).forEach(id => {
+    $('#'+id).addEventListener('click', e => {
+      const on = !e.currentTarget.classList.contains('is-on');
+      e.currentTarget.classList.toggle('is-on', on);
+      e.currentTarget.setAttribute('aria-pressed', String(on));
+      if(id === 'tglMock'){
+        API.USE_MOCK = on;
+        log('sysLog', on ? 'INFO' : 'WARN', on ? 'Simulator enabled.' : `Live mode — requests now go to ${API.BASE_URL}`);
+      }
+      if(id === 'tglAuto') State.autoSort = on;
+    });
+  });
+
+  $('#btnSave').addEventListener('click', () => {
+    API.saveSettings({baseUrl:API.BASE_URL, threshold:State.threshold, servoSpeed:State.servoSpeed, autoSort:State.autoSort});
+    log('sysLog','SUCCESS','Settings saved.');
+    const b = $('#btnSave'); b.textContent = 'Saved'; setTimeout(() => b.textContent = 'Save settings', 1400);
+  });
+  $('#btnReset').addEventListener('click', () => {
+    State.threshold = 85; State.servoSpeed = 100;
+    $('#thrRange').value = 85; $('#thrVal').textContent = '85%';
+    $('#spdRange').value = 100; $('#spdVal').textContent = '100%';
+    log('sysLog','INFO','Settings restored to defaults.');
+  });
+
+  // keyboard: Escape latches the emergency stop
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && !State.estop) setEstop(true); });
+}
+
+/* ==============================================================
+   12. BOOT
+   ============================================================== */
+function tickClock(){
+  const s = Math.floor((Date.now() - State.startedAt)/1000);
+  $('#uptime').textContent =
+    [Math.floor(s/3600), Math.floor(s/60)%60, s%60].map(v => String(v).padStart(2,'0')).join(':');
+  if(State.operation === 'Ready' && !State.estop){
+    const t = hhmmss(new Date());
+    $('#camStampDash').textContent = t;
+    $('#camStampDet').textContent = t;
+  }
+}
+
+async function init(){
+  State.history = Mock.seedHistory(38);
+  State.cycleCount = State.history.length;
+  $('#chipCycleVal').textContent = '#' + String(State.cycleCount).padStart(4,'0');
+
+  bindEvents();
+  renderJointControls();
+  renderSystem();
+  renderCatCards();
+  renderDetection(State.history[0]);
+  refreshAll();
+  setOperation('Ready','Home');
+
+  log('sysLog','SUCCESS','Backend reachable — 6 subsystems online.');
+  log('sysLog','INFO','MobileNetV2 waste classifier loaded (3 classes).');
+  log('sysLog','WARN','J3 servo running warm at 58 °C — monitoring.');
+  log('cmdLog','INFO','Console ready. Running on simulated data.');
+
+  setMode('AUTOMATIC');
+  setInterval(tickClock, 1000);
+  tickClock();
+}
+
+
+init();
+</script>
+<script src="live_patch.js"></script>
+</body>
+</html>
